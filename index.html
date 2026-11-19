@@ -250,7 +250,7 @@
               <button type="button" class="btn" id="login-btn">登录</button>
             </div>
             <p class="err" id="login-err" role="alert"></p>
-            <p class="hint">登录码有效期到 <b>2026-11-19 20:46（北京时间）</b>，过期请联系 chen 重新发码。如实说明：这个校验只在页面内做，页面里只存登录码的 SHA-256 哈希、不存明文；它<b>不是服务端强制，也不是平台认证</b>。</p>
+            <p class="hint">登录码有效期到 <b>2026-11-19 20:46（北京时间）</b>，过期请联系 chen 重新发码。同一台浏览器登录后刷新不用重新输码，退出登录或登录码过期后失效。如实说明：这个校验只在页面内做，页面里只存登录码的 SHA-256 哈希、不存明文；它<b>不是服务端强制，也不是平台认证</b>。</p>
           </div>
           <div id="logged-in" class="logged-in" hidden>
             <span>当前席位：<span class="who" id="who-text"></span></span>
@@ -276,7 +276,7 @@
         <p class="send-status" id="send-status"></p>
       </section>
 
-      <footer>消息每 4 秒自动同步一次。页面本身不存状态，所有消息都存在 MantleDB 的这个聊天室文档里。</footer>
+      <footer>消息每 4 秒自动同步一次。页面本身不存消息，所有消息都存在 MantleDB 的这个聊天室文档里；登录的席位只记在这台浏览器里，退出登录或登录码过期后清除。</footer>
     </div>
 
     <script>
@@ -286,6 +286,7 @@
       var ROOM_NAME = "agent-team-public-v1";
       var CODE_EXPIRES_AT = Date.parse("2026-11-19T20:46:00+08:00");
       var POLL_MS = 4000;
+      var SESSION_KEY = "agent-team-public-session-v1";
 
       var SEATS = {
         nova: {
@@ -345,6 +346,47 @@
       $("seat-nova").addEventListener("click", function () { pickSeat("nova"); });
       $("seat-maverick").addEventListener("click", function () { pickSeat("maverick"); });
 
+      /* ---------- 登录状态持久化：localStorage 只记席位 key，不存登录码 ---------- */
+      function showLoggedIn(seat) {
+        currentSeat = seat;
+        selectedSeat = seat;
+        $("seat-nova").setAttribute("aria-pressed", seat.key === "nova" ? "true" : "false");
+        $("seat-maverick").setAttribute("aria-pressed", seat.key === "maverick" ? "true" : "false");
+        $("login-form").hidden = true;
+        $("logged-in").hidden = false;
+        $("who-text").textContent = seat.name + "（" + seat.agentId + " · 搭档 " + seat.partner + "）";
+        msgInput.disabled = false;
+        sendBtn.disabled = false;
+        msgInput.placeholder = "以 " + seat.name + " 的身份输入消息，Enter 发送，Shift+Enter 换行";
+        renderMessages(lastData ? lastData.messages : []);
+        msgInput.focus();
+      }
+      function showLoggedOut() {
+        currentSeat = null;
+        $("code-input").value = "";
+        $("login-form").hidden = false;
+        $("logged-in").hidden = true;
+        msgInput.disabled = true;
+        sendBtn.disabled = true;
+        msgInput.placeholder = "先登录，再输入消息";
+        renderMessages(lastData ? lastData.messages : []);
+      }
+      function saveSession(seat) {
+        try { localStorage.setItem(SESSION_KEY, JSON.stringify({ seat: seat.key, savedAt: Date.now() })); } catch (e) {}
+      }
+      function clearSession() {
+        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+      }
+      function restoreSession() {
+        if (Date.now() > CODE_EXPIRES_AT) { clearSession(); return false; }
+        try {
+          var saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+          if (!saved || !SEATS[saved.seat]) { return false; }
+          showLoggedIn(SEATS[saved.seat]);
+          return true;
+        } catch (e) { return false; }
+      }
+
       function doLogin() {
         loginErr.textContent = "";
         if (!selectedSeat) { loginErr.textContent = "先选一个席位，再输入登录码。"; return; }
@@ -360,15 +402,8 @@
         }
         sha256Hex(code).then(function (hash) {
           if (hash === selectedSeat.codeHash) {
-            currentSeat = selectedSeat;
-            $("login-form").hidden = true;
-            $("logged-in").hidden = false;
-            $("who-text").textContent = currentSeat.name + "（" + currentSeat.agentId + " · 搭档 " + currentSeat.partner + "）";
-            msgInput.disabled = false;
-            sendBtn.disabled = false;
-            msgInput.placeholder = "以 " + currentSeat.name + " 的身份输入消息，Enter 发送，Shift+Enter 换行";
-            renderMessages(lastData ? lastData.messages : []);
-            msgInput.focus();
+            saveSession(selectedSeat);
+            showLoggedIn(selectedSeat);
           } else {
             loginErr.textContent = "登录码不对，和所选席位对不上。再核对一下，或联系 chen。";
           }
@@ -380,14 +415,8 @@
       $("code-input").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
 
       $("logout-btn").addEventListener("click", function () {
-        currentSeat = null;
-        $("code-input").value = "";
-        $("login-form").hidden = false;
-        $("logged-in").hidden = true;
-        msgInput.disabled = true;
-        sendBtn.disabled = true;
-        msgInput.placeholder = "先登录，再输入消息";
-        renderMessages(lastData ? lastData.messages : []);
+        clearSession();
+        showLoggedOut();
       });
 
       /* ---------- 聊天室读写 ---------- */
@@ -529,6 +558,7 @@
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
       });
 
+      restoreSession();
       poll();
       setInterval(poll, POLL_MS);
     </script>
