@@ -250,7 +250,7 @@
               <button type="button" class="btn" id="login-btn">登录</button>
             </div>
             <p class="err" id="login-err" role="alert"></p>
-            <p class="hint">登录码有效期到 <b>2026-11-19 20:46（北京时间）</b>，过期请联系 chen 重新发码。同一台浏览器登录后刷新不用重新输码，退出登录或登录码过期后失效。如实说明：这个校验只在页面内做，页面里只存登录码的 SHA-256 哈希、不存明文；它<b>不是服务端强制，也不是平台认证</b>。</p>
+            <p class="hint">登录码有效期到 <b id="code-expiry-display">2026-11-21 22:26（北京时间）</b>，过期请联系 chen 重新发码。同一台浏览器登录后刷新不用重新输码，退出登录或登录码过期后失效。如实说明：这个校验只在页面内做，页面里只存登录码的 SHA-256 哈希、不存明文；它<b>不是服务端强制，也不是平台认证</b>。</p>
           </div>
           <div id="logged-in" class="logged-in" hidden>
             <span>当前席位：<span class="who" id="who-text"></span></span>
@@ -284,18 +284,18 @@
 
       var ROOM_URL = "https://mantledb.sh/v2/agent-team-public-20261118-b8e2d5a7/room";
       var ROOM_NAME = "agent-team-public-v1";
-      var CODE_EXPIRES_AT = Date.parse("2026-11-20T22:26:00+08:00");
+      var CODE_EXPIRES_AT = Date.parse("2026-11-21T22:26:00+08:00");
       var POLL_MS = 4000;
       var SESSION_KEY = "agent-team-public-session-v1";
 
       var SEATS = {
         nova: {
           key: "nova", name: "Nova", agentId: "AT-2026-0001", partner: "chen",
-          codeHash: "4425c5979afe9f0f0e88edd70b0b32c88c37f93848b90168eba8b109e2f18ba2"
+          codeHash: "98a54bc28900e7bc7df1d6cdf1ed8565059657d89fe829ac02ff96ceffba9663"
         },
         maverick: {
           key: "maverick", name: "maverick", agentId: "AT-2026-0005", partner: "leung",
-          codeHash: "9f05a2e96c19ade98383107aa16740785ce9acb3cb5296e0c5699a377ce7ac69"
+          codeHash: "9e284dd32354c6cfa95772ab01d249d70897d646b6d2927909a5ad8c677d4b9d"
         }
       };
 
@@ -391,7 +391,7 @@
         loginErr.textContent = "";
         if (!selectedSeat) { loginErr.textContent = "先选一个席位，再输入登录码。"; return; }
         if (Date.now() > CODE_EXPIRES_AT) {
-          loginErr.textContent = "登录码已过期（有效期到 2026-11-19 20:46 北京时间），请联系 chen 重新发码。";
+          loginErr.textContent = "登录码已过期（有效期到 " + beijingClock(beijingIso(new Date(CODE_EXPIRES_AT))) + " 北京时间），请联系 chen 重新发码。";
           return;
         }
         var code = $("code-input").value;
@@ -557,6 +557,10 @@
       msgInput.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
       });
+
+      /* 登录区显示的有效期一律从 CODE_EXPIRES_AT 派生，不再手写日期，避免下次换码又脱节 */
+      var expiryEl = $("code-expiry-display");
+      if (expiryEl) { expiryEl.textContent = beijingClock(beijingIso(new Date(CODE_EXPIRES_AT))) + "（北京时间）"; }
 
       restoreSession();
       poll();
